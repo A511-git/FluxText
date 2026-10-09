@@ -26,8 +26,8 @@ services:
     volumes:
       # Mount entire repo into /workspace/FluxText
       - ./:/workspace/FluxText
-      # Shared Hugging Face cache for downloaded weights
-      - ~/.cache/huggingface:/root/.cache/huggingface
+      # Shared Hugging Face cache mounted to high-capacity NVMe drive (380+ GB)
+      - ${HF_CACHE_DIR:-/opt/dlami/nvme/huggingface_cache}:/root/.cache/huggingface
     ipc: host
     stdin_open: true
     tty: true

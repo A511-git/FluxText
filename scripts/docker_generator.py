@@ -121,8 +121,8 @@ def generate_docker_compose_yaml(service_name: str, repo_name: str, frontend_por
 {ports_section}    volumes:
       # Mount entire repository into /workspace/{repo_name}
       - ./:/workspace/{repo_name}
-      # Shared Hugging Face cache for downloaded model weights
-      - ~/.cache/huggingface:/root/.cache/huggingface
+      # Shared Hugging Face cache on high-capacity NVMe drive (380+ GB)
+      - ${{HF_CACHE_DIR:-/opt/dlami/nvme/huggingface_cache}}:/root/.cache/huggingface
     ipc: host
     stdin_open: true
     tty: true
