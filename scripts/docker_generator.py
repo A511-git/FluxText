@@ -118,6 +118,8 @@ def generate_docker_compose_yaml(service_name: str, repo_name: str, frontend_por
       - TORCH_CUDA_ARCH_LIST=12.0;10.0
       - UV_SYSTEM_PYTHON=1
       - HF_HOME=/root/.cache/huggingface
+      - HF_TOKEN=${{HF_TOKEN:-}}
+      - HUGGING_FACE_HUB_TOKEN=${{HF_TOKEN:-}}
 {ports_section}    volumes:
       # Mount entire repository into /workspace/{repo_name}
       - ./:/workspace/{repo_name}

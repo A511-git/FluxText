@@ -18,6 +18,8 @@ services:
       - TORCH_CUDA_ARCH_LIST=12.0;10.0
       - UV_SYSTEM_PYTHON=1
       - HF_HOME=/root/.cache/huggingface
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
     ports:
       # Gradio inbuilt frontend port mapped to host
       - "6681:6681"
