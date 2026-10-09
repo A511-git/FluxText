@@ -1,6 +1,10 @@
 from typing import List, Union, Optional, Dict, Any, Callable
 
-from diffusers.models.attention_processor import Attention, F
+try:
+    from diffusers.models.attention_processor import Attention, F
+except ImportError:
+    from diffusers.models.attention_processor import Attention
+    import torch.nn.functional as F
 import torch
 
 from .lora_controller import enable_lora

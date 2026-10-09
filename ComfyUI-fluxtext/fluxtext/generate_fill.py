@@ -1,13 +1,26 @@
 import os
 from typing import List, Union, Optional, Dict, Any, Callable
 
+import numpy as np
 from diffusers.pipelines import FluxPipeline
-from diffusers.pipelines.flux.pipeline_flux import (
-    FluxPipelineOutput,
-    calculate_shift,
-    retrieve_timesteps,
-    np,
-)
+try:
+    from diffusers.pipelines.flux.pipeline_flux import (
+        FluxPipelineOutput,
+        calculate_shift,
+        retrieve_timesteps,
+    )
+except ImportError:
+    try:
+        from diffusers.pipelines.flux.pipeline_output import FluxPipelineOutput
+    except ImportError:
+        try:
+            from diffusers.pipelines.pipeline_utils import ImagePipelineOutput as FluxPipelineOutput
+        except ImportError:
+            from dataclasses import dataclass
+            @dataclass
+            class FluxPipelineOutput:
+                images: Any
+    from diffusers.pipelines.flux.pipeline_flux import calculate_shift, retrieve_timesteps
 import torch
 import torch.nn.functional as F
 import yaml

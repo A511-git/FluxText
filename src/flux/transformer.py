@@ -1,14 +1,58 @@
 from typing import List, Union, Optional, Dict, Any, Callable
 
-from diffusers.models.transformers.transformer_flux import (
-    FluxTransformer2DModel,
-    Transformer2DModelOutput,
-    USE_PEFT_BACKEND,
-    is_torch_version,
-    scale_lora_layers,
-    unscale_lora_layers,
-    logger,
-)
+try:
+    from diffusers.models.transformers.transformer_flux import (
+        FluxTransformer2DModel,
+        Transformer2DModelOutput,
+        USE_PEFT_BACKEND,
+        is_torch_version,
+        scale_lora_layers,
+        unscale_lora_layers,
+        logger,
+    )
+except ImportError:
+    try:
+        from diffusers.models.transformers.transformer_flux import FluxTransformer2DModel
+    except ImportError:
+        from diffusers import FluxTransformer2DModel
+
+    try:
+        from diffusers.models.modeling_outputs import Transformer2DModelOutput
+    except ImportError:
+        try:
+            from diffusers.models.transformers.transformer_flux import Transformer2DModelOutput
+        except ImportError:
+            from dataclasses import dataclass
+            from typing import Any
+            @dataclass
+            class Transformer2DModelOutput:
+                sample: Any
+
+    try:
+        from diffusers.utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers
+    except ImportError:
+        try:
+            from diffusers.utils.peft_utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers
+        except ImportError:
+            try:
+                from diffusers.utils.torch_utils import USE_PEFT_BACKEND
+            except ImportError:
+                USE_PEFT_BACKEND = False
+            def scale_lora_layers(model, weight=1.0): pass
+            def unscale_lora_layers(model, weight=1.0): pass
+
+    try:
+        from diffusers.utils import is_torch_version
+    except ImportError:
+        def is_torch_version(op, version): return True
+
+    try:
+        from diffusers.utils import logging
+        logger = logging.get_logger(__name__)
+    except ImportError:
+        import logging
+        logger = logging.getLogger(__name__)
+
 import numpy as np
 import torch
 

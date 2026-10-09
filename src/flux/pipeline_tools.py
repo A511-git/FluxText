@@ -1,6 +1,9 @@
 from diffusers.pipelines import FluxPipeline
 from diffusers.utils import logging
-from diffusers.pipelines.flux.pipeline_flux import logger
+try:
+    from diffusers.pipelines.flux.pipeline_flux import logger
+except ImportError:
+    logger = logging.get_logger(__name__)
 from torch import Tensor
 
 
