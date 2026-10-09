@@ -96,7 +96,8 @@ def parse_args():
     parser.add_argument(
         '--config_path',
         type=str,
-
+        default='train/config/word_512_size.yaml',
+        help='path of config file (default: train/config/word_512_size.yaml)'
     )
     args = parser.parse_args()
     return args

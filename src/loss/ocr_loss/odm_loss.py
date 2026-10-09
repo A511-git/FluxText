@@ -105,8 +105,10 @@ class ODMLoss:
                 width=vision_cfg['vision_width'],
         )
         self.ResNet1.requires_grad_(False).eval()
-        self.dtype = _dtype_func(self.ResNet1)
-        state_dict = torch.load(modelpath)
+        try:
+            state_dict = torch.load(modelpath, map_location='cpu', weights_only=False)
+        except TypeError:
+            state_dict = torch.load(modelpath, map_location='cpu')
         new_state_dict = get_param(state_dict)
         # self.ResNet1.load_state_dict(new_state_dict, strict=True)
         post_state_dict = {}

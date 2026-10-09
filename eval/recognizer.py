@@ -97,7 +97,11 @@ def create_predictor(model_dir=None, model_lang='ch', is_onnx=False):
 
         rec_model = RecModel(rec_config)
         if model_file_path is not None:
-            rec_model.load_state_dict(torch.load(model_file_path, map_location="cpu"))
+            try:
+                state = torch.load(model_file_path, map_location="cpu", weights_only=False)
+            except TypeError:
+                state = torch.load(model_file_path, map_location="cpu")
+            rec_model.load_state_dict(state)
             rec_model.eval()
         return rec_model.eval()
 

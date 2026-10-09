@@ -5,3 +5,6 @@
 
 src/clip/
 tmp/
+.agents
+uploaded_stuff/
+.remote_bridge/

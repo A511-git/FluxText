@@ -1,0 +1,35 @@
+services:
+  fluxtext:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fluxtext_blackwell_container
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - FORCE_CUDA=1
+      - TORCH_CUDA_ARCH_LIST=12.0;10.0
+      - UV_SYSTEM_PYTHON=1
+      - HF_HOME=/root/.cache/huggingface
+    ports:
+      # Gradio inbuilt frontend port mapped to host
+      - "6681:6681"
+      # ComfyUI port mapped to host (if used)
+      - "8188:8188"
+    volumes:
+      # Mount entire repo into /workspace/FluxText
+      - ./:/workspace/FluxText
+      # Shared Hugging Face cache for downloaded weights
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    ipc: host
+    stdin_open: true
+    tty: true
+    working_dir: /workspace/FluxText
+    command: /bin/bash

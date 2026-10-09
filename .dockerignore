@@ -1,0 +1,11 @@
+.git
+.agents
+.remote_bridge
+uploaded_stuff
+results
+*.pyc
+__pycache__
+*.safetensors
+*.bin
+*.pth
+*.tar.gz

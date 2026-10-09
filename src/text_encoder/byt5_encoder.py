@@ -26,10 +26,16 @@ class GlyphByt5Encoder:
             **config.byt5_mapper_config,
         )
 
-        byt5_mapper_para = torch.load(byt5mapper_path, map_location='cpu')
+        try:
+            byt5_mapper_para = torch.load(byt5mapper_path, map_location='cpu', weights_only=False)
+        except TypeError:
+            byt5_mapper_para = torch.load(byt5mapper_path, map_location='cpu')
         self.byt5_mapper.load_state_dict(byt5_mapper_para)
         
-        byt5_model_para = torch.load(byt5_path, map_location='cpu')
+        try:
+            byt5_model_para = torch.load(byt5_path, map_location='cpu', weights_only=False)
+        except TypeError:
+            byt5_model_para = torch.load(byt5_path, map_location='cpu')
         self.byt5_model.load_state_dict(byt5_model_para)
         self.byt5_max_length = byt5_max_length
 
