@@ -312,6 +312,13 @@ class DockerSetupGenerator:
             readme_path.write_text(readme_content, encoding="utf-8")
             print(f"[+] Created root CUSTOM_README.md: {readme_path}")
 
+        # 5. Write .env.example for Hugging Face token support
+        env_example_path = self.repo_dir / ".env.example"
+        if not env_example_path.exists():
+            env_example_content = "# Hugging Face Access Token for Gated Models (e.g., black-forest-labs/FLUX.1-Fill-dev)\nHF_TOKEN=your_huggingface_token_here\n"
+            env_example_path.write_text(env_example_content, encoding="utf-8")
+            print(f"[+] Created .env.example: {env_example_path}")
+
         print("\n[+] All Docker & Runbook assets generated successfully!")
 
 

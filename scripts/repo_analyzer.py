@@ -36,8 +36,20 @@ class RepoAnalyzer:
             "comfyui_details": {},
             "inference_scripts": [],
             "requirements_present": (self.repo_dir / "requirements.txt").exists(),
-            "architectures_detected": []
+            "architectures_detected": [],
+            "gated_models_detected": [],
+            "requires_hf_token": False,
+            "fragile_code_patterns": []
         }
+
+        # Scan for Gated Models and Fragile Patterns
+        gated_models = self._detect_gated_models()
+        if gated_models:
+            result["gated_models_detected"] = gated_models
+            result["requires_hf_token"] = True
+
+        fragile_patterns = self._detect_fragile_patterns()
+        result["fragile_code_patterns"] = fragile_patterns
 
         # 1. Scan for Frontends (Gradio, Streamlit, ComfyUI, Flask/FastAPI)
         gradio_info = self._detect_gradio()
@@ -231,6 +243,58 @@ class RepoAnalyzer:
 
         return sorted(list(found))
 
+    def _detect_gated_models(self) -> List[str]:
+        gated_signatures = [
+            "black-forest-labs/FLUX",
+            "meta-llama/Llama",
+            "meta-llama/Meta-Llama",
+            "google/gemma",
+            "stabilityai/stable-diffusion-3",
+            "mistralai/Mistral",
+        ]
+        found = set()
+        for p in self.repo_dir.rglob("*.py"):
+            if any(x in str(p) for x in [".git", "__pycache__", "venv", ".remote_bridge", "uploaded_stuff"]):
+                continue
+            try:
+                content = p.read_text(encoding="utf-8", errors="ignore")
+                for sig in gated_signatures:
+                    if sig.lower() in content.lower():
+                        found.add(sig)
+            except Exception:
+                pass
+        for p in self.repo_dir.rglob("*.yaml"):
+            try:
+                content = p.read_text(encoding="utf-8", errors="ignore")
+                for sig in gated_signatures:
+                    if sig.lower() in content.lower():
+                        found.add(sig)
+            except Exception:
+                pass
+        return sorted(list(found))
+
+    def _detect_fragile_patterns(self) -> List[Dict[str, str]]:
+        issues = []
+        for p in self.repo_dir.rglob("*.py"):
+            if any(x in str(p) for x in [".git", "__pycache__", "venv", ".remote_bridge", "uploaded_stuff"]):
+                continue
+            rel = str(p.relative_to(self.repo_dir))
+            try:
+                content = p.read_text(encoding="utf-8", errors="ignore")
+                if "np.int0" in content:
+                    issues.append({"file": rel, "pattern": "np.int0", "fix": "Replace with np.int32 (removed in NumPy 2.x)"})
+                if ".getsize(" in content and "ImageFont" in content:
+                    issues.append({"file": rel, "pattern": ".getsize()", "fix": "Replace with .getbbox() (removed in Pillow 10+)"})
+                if ".getoffset(" in content and "ImageFont" in content:
+                    issues.append({"file": rel, "pattern": ".getoffset()", "fix": "Replace with .getbbox() (removed in Pillow 10+)"})
+                if "USE_PEFT_BACKEND" in content and "from diffusers.models.transformers" in content:
+                    issues.append({"file": rel, "pattern": "USE_PEFT_BACKEND in diffusers.models", "fix": "Import from diffusers.utils instead"})
+                if "import ujson" in content and "try:" not in content:
+                    issues.append({"file": rel, "pattern": "bare import ujson", "fix": "Add try/except fallback to import json as ujson"})
+            except Exception:
+                pass
+        return issues
+
 
 def main():
     import argparse
@@ -263,7 +327,15 @@ def main():
         print(f"[*] Inference / Eval Scripts   : {len(data['inference_scripts'])} found")
         for s in data['inference_scripts'][:5]:
             print(f"    - {s}")
+        if data.get('gated_models_detected'):
+            print(f"[!] Gated Models Detected     : {data['gated_models_detected']}")
+            print(f"    - Set HF_TOKEN in .env or environment for authentication!")
+        if data.get('fragile_code_patterns'):
+            print(f"[!] Fragile Patterns Detected : {len(data['fragile_code_patterns'])} items")
+            for item in data['fragile_code_patterns'][:3]:
+                print(f"    - {item['file']}: {item['pattern']} -> {item['fix']}")
         print("=" * 64)
+
 
 if __name__ == "__main__":
     main()
