@@ -23,7 +23,7 @@ def min_bounding_rect(img):
     max_contour = max(contours, key=cv2.contourArea)
     rect = cv2.minAreaRect(max_contour)
     box = cv2.boxPoints(rect)
-    box = np.int0(box)
+    box = np.int32(box)
     # sort
     x_sorted = sorted(box, key=lambda x: x[0])
     left = x_sorted[:2]

@@ -2,9 +2,17 @@ import json
 import webcolors
 
 
+def _get_css3_names():
+    if hasattr(webcolors, 'CSS3_HEX_TO_NAMES'):
+        return webcolors.CSS3_HEX_TO_NAMES
+    try:
+        return {webcolors.name_to_hex(n): n for n in webcolors.names("css3")}
+    except Exception:
+        return {"#000000": "black", "#ffffff": "white"}
+
 def closest_color(requested_color):  
     min_colors = {}  
-    for key, name in webcolors.CSS3_HEX_TO_NAMES.items():  
+    for key, name in _get_css3_names().items():  
         r_c, g_c, b_c = webcolors.hex_to_rgb(key)  
         rd = (r_c - requested_color[0]) ** 2  
         gd = (g_c - requested_color[1]) ** 2  

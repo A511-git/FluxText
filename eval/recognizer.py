@@ -3,7 +3,12 @@ Copyright (c) Alibaba, Inc. and its affiliates.
 '''
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+_cur_dir = os.path.dirname(os.path.abspath(__file__))
+if _cur_dir not in sys.path:
+    sys.path.insert(0, _cur_dir)
+_parent_dir = os.path.abspath(os.path.join(_cur_dir, '..'))
+if _parent_dir not in sys.path:
+    sys.path.append(_parent_dir)
 import cv2
 import numpy as np
 import math
@@ -25,7 +30,7 @@ def min_bounding_rect(img):
     max_contour = max(contours, key=cv2.contourArea)
     rect = cv2.minAreaRect(max_contour)
     box = cv2.boxPoints(rect)
-    box = np.int0(box)
+    box = np.int32(box)
     # sort
     x_sorted = sorted(box, key=lambda x: x[0])
     left = x_sorted[:2]

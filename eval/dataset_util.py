@@ -1,6 +1,9 @@
 import json
 import pathlib
-import ujson
+try:
+    import ujson
+except ImportError:
+    import json as ujson
 
 __all__ = ['load', 'save', 'show_bbox_on_image']
 

@@ -80,7 +80,11 @@ RUN if [ -f /workspace/{repo_name}/requirements.txt ]; then \\
     fi
 
 # Ensure modern transformers & accelerate using cu128 index
-RUN uv pip install --extra-index-url https://download.pytorch.org/whl/cu128 "transformers>=4.37.0" "accelerate>=0.28.0" diffusers peft
+RUN uv pip install --extra-index-url https://download.pytorch.org/whl/cu128 \
+    "transformers>=4.37.0" "accelerate>=0.28.0" diffusers peft \
+    opencv-python-headless gradio matplotlib pyyaml einops ftfy sentencepiece lightning prodigyopt \
+    ujson easydict scikit-image Levenshtein pandas pandarallel webcolors av lpips \
+    mmengine modelscope safetensors datasets "numpy<2" tqdm requests "openai-clip>=1.0.1"
 
 # Default entry command
 CMD ["/bin/bash"]

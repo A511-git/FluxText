@@ -59,11 +59,13 @@ RUN if [ -f /workspace/FluxText/requirements.txt ]; then \
             -r /workspace/FluxText/requirements.txt || true ; \
     fi
 
-# Ensure modern transformers, accelerate, diffusers, peft and core FluxText runtime packages
+# Ensure modern transformers, accelerate, diffusers, peft and all FluxText runtime/eval packages
 RUN uv pip install \
     --extra-index-url https://download.pytorch.org/whl/cu128 \
     "transformers>=4.37.0" "accelerate>=0.28.0" diffusers peft \
-    opencv-python-headless gradio matplotlib pyyaml einops ftfy sentencepiece lightning prodigyopt
+    opencv-python-headless gradio matplotlib pyyaml einops ftfy sentencepiece lightning prodigyopt \
+    ujson easydict scikit-image Levenshtein pandas pandarallel webcolors av lpips \
+    mmengine modelscope safetensors datasets "numpy<2" tqdm requests "openai-clip>=1.0.1"
 
 # Default entry command
 CMD ["/bin/bash"]
