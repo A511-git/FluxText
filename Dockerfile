@@ -59,10 +59,11 @@ RUN if [ -f /workspace/FluxText/requirements.txt ]; then \
             -r /workspace/FluxText/requirements.txt || true ; \
     fi
 
-# Ensure modern transformers, accelerate, diffusers, peft using cu128 index
+# Ensure modern transformers, accelerate, diffusers, peft and core FluxText runtime packages
 RUN uv pip install \
     --extra-index-url https://download.pytorch.org/whl/cu128 \
-    "transformers>=4.37.0" "accelerate>=0.28.0" diffusers peft
+    "transformers>=4.37.0" "accelerate>=0.28.0" diffusers peft \
+    opencv-python-headless gradio matplotlib pyyaml einops ftfy sentencepiece lightning prodigyopt
 
 # Default entry command
 CMD ["/bin/bash"]
