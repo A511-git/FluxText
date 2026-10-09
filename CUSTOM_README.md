@@ -26,7 +26,7 @@ Run the Remote Bridge in the background on your host machine to activate your pu
 
 ### Linux / macOS / Remote SSH Host:
 ```bash
-nohup python scripts/remote_bridge_launcher.py --repo . > .remote_bridge/bridge.log 2>&1 &
+mkdir -p .remote_bridge && nohup python3 scripts/remote_bridge_launcher.py --repo . > .remote_bridge/bridge.log 2>&1 &
 ```
 
 ### Windows (PowerShell):
