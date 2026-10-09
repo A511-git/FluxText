@@ -9,7 +9,6 @@ FROM nvidia/cuda:12.8.0-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV UV_SYSTEM_PYTHON=1
-ENV UV_NO_CACHE=1
 ENV FORCE_CUDA=1
 ENV TORCH_CUDA_ARCH_LIST="12.0;10.0"
 
@@ -37,7 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir uv ninja gdown wheel setuptools
 
 # Install PyTorch with CUDA 12.8 (Native Blackwell sm_100/sm_120 Support)
-RUN uv pip install --no-cache \
+RUN uv pip install \
     torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cu128
 
@@ -55,13 +54,13 @@ RUN if [ -f /workspace/FluxText/requirements.txt ]; then \
         sed -i '/^torchvision==/d' /workspace/FluxText/requirements.txt && \
         sed -i '/^torchaudio==/d' /workspace/FluxText/requirements.txt && \
         sed -i '/^triton==/d' /workspace/FluxText/requirements.txt && \
-        uv pip install --no-cache \
+        uv pip install \
             --extra-index-url https://download.pytorch.org/whl/cu128 \
             -r /workspace/FluxText/requirements.txt || true ; \
     fi
 
 # Ensure modern transformers, accelerate, diffusers, peft using cu128 index
-RUN uv pip install --no-cache \
+RUN uv pip install \
     --extra-index-url https://download.pytorch.org/whl/cu128 \
     "transformers>=4.37.0" "accelerate>=0.28.0" diffusers peft
 

@@ -31,7 +31,6 @@ FROM nvidia/cuda:12.8.0-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV UV_SYSTEM_PYTHON=1
-ENV UV_NO_CACHE=1
 ENV FORCE_CUDA=1
 ENV TORCH_CUDA_ARCH_LIST="12.0;10.0"
 
@@ -77,11 +76,11 @@ RUN if [ -f /workspace/{repo_name}/requirements.txt ]; then \\
         sed -i '/^torchvision==/d' /workspace/{repo_name}/requirements.txt && \\
         sed -i '/^torchaudio==/d' /workspace/{repo_name}/requirements.txt && \\
         sed -i '/^triton==/d' /workspace/{repo_name}/requirements.txt && \\
-        uv pip install --no-cache --extra-index-url https://download.pytorch.org/whl/cu128 -r /workspace/{repo_name}/requirements.txt || true ; \\
+        uv pip install --extra-index-url https://download.pytorch.org/whl/cu128 -r /workspace/{repo_name}/requirements.txt || true ; \\
     fi
 
 # Ensure modern transformers & accelerate using cu128 index
-RUN uv pip install --no-cache --extra-index-url https://download.pytorch.org/whl/cu128 "transformers>=4.37.0" "accelerate>=0.28.0" diffusers peft
+RUN uv pip install --extra-index-url https://download.pytorch.org/whl/cu128 "transformers>=4.37.0" "accelerate>=0.28.0" diffusers peft
 
 # Default entry command
 CMD ["/bin/bash"]
