@@ -42,7 +42,7 @@ class OminiModelLORAFIll(L.LightningModule):
         self.transformer.train()
 
         self.flux_pipe: FluxFillPipeline = (
-            FluxFillPipeline.from_pretrained(flux_pipe_id, transformer=self.transformer, text_encoder=None, text_encoder_2=None).to(dtype=dtype).to(device)
+            FluxFillPipeline.from_pretrained(flux_pipe_id, transformer=self.transformer, text_encoder=None, text_encoder_2=None, torch_dtype=dtype).to(device)
         )
 
         # Freeze the Flux pipeline

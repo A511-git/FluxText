@@ -21,7 +21,7 @@ import torchvision.transforms as T
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'eval')))
 from eval.t3_dataset import draw_glyph2
 from src.flux.condition import Condition
-from src.flux.generate_fill import generate_fill
+from src.flux.generate_fill import generate_fill, generate_fill_low_RAM
 from src.train.model import OminiModelFIll
 
 ASPECT_RATIO_LD_LIST = [  # width:height
@@ -99,15 +99,23 @@ def parse_args():
         default='train/config/word_512_size.yaml',
         help='path of config file (default: train/config/word_512_size.yaml)'
     )
+    parser.add_argument(
+        '--low_vram',
+        action='store_true',
+        help='force low VRAM CPU-GPU offload mode (auto-enabled if GPU VRAM <= 36GB)'
+    )
     args = parser.parse_args()
     return args
 
-def init_pipeline(args, config):
+USE_LOW_VRAM = False
+
+def init_pipeline(args, config, is_low_vram=False):
     training_config = config["train"]
+    target_device = "cpu" if is_low_vram else "cuda"
     trainable_model = OminiModelFIll(
             flux_pipe_id=config["flux_path"],
             lora_config=training_config["lora_config"],
-            device=f"cuda",
+            device=target_device,
             dtype=getattr(torch, config["dtype"]),
             optimizer_config=training_config["optimizer"],
             model_config=config.get("model", {}),
@@ -128,7 +136,13 @@ def get_captions(ori_image, _input_file):
     image = Image.fromarray(ori_image)
     inputs = processor(image, return_tensors="pt").to(device, torch.float16)
 
+    if USE_LOW_VRAM:
+        blipmodel.to(device)
     generated_ids = blipmodel.generate(**inputs, max_new_tokens=20)
+    if USE_LOW_VRAM:
+        blipmodel.to('cpu')
+        torch.cuda.empty_cache()
+
     generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
 
     caption = f'{generated_text}, that reads "{_input_file}"'
@@ -181,7 +195,8 @@ def generate_image_func(prompt, img, glyph_img, mask_img, seed):
                     position_delta=position_delta,
                 )
     generator.manual_seed(seed)
-    res = generate_fill(
+    gen_func = generate_fill_low_RAM if USE_LOW_VRAM else generate_fill
+    res = gen_func(
         pipe,
         prompt=prompt,
         conditions=[condition],
@@ -281,9 +296,15 @@ if __name__ == '__main__':
     processor = AutoProcessor.from_pretrained("Salesforce/blip2-opt-2.7b")
     blipmodel = Blip2ForConditionalGeneration.from_pretrained("Salesforce/blip2-opt-2.7b", torch_dtype=torch.float16)
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    blipmodel.to(device, torch.float16)
+    vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3) if torch.cuda.is_available() else 0
+    USE_LOW_VRAM = args.low_vram or (torch.cuda.is_available() and vram_gb < 36)
+    if USE_LOW_VRAM:
+        print(f"[*] Low-VRAM CPU offloading mode active (GPU VRAM: {vram_gb:.1f}GB <= 36GB).")
+        blipmodel.to(torch.float16)
+    else:
+        blipmodel.to(device, torch.float16)
 
-    pipe, trainable_model = init_pipeline(args, config)
+    pipe, trainable_model = init_pipeline(args, config, is_low_vram=USE_LOW_VRAM)
 
     # Launch the Gradio app
     demo.queue().launch(server_name="0.0.0.0", server_port=6681, share=False)

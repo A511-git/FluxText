@@ -36,9 +36,9 @@ class OminiModelFIll(L.LightningModule):
         self.model_config = model_config
         self.optimizer_config = optimizer_config
 
-        # Load the Flux pipeline
+        # Load the Flux pipeline in native dtype (bfloat16) to prevent 70GB FP32 RAM spike
         self.flux_pipe: FluxFillPipeline = (
-            FluxFillPipeline.from_pretrained(flux_pipe_id).to(dtype=dtype).to(device)
+            FluxFillPipeline.from_pretrained(flux_pipe_id, torch_dtype=dtype).to(device)
         )
         self.transformer = self.flux_pipe.transformer
         self.transformer.gradient_checkpointing = gradient_checkpointing
