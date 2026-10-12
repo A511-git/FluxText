@@ -90,7 +90,7 @@ def parse_args():
     parser.add_argument(
         "--model_path",
         type=str,
-        default='models/anytext_v1.1.ckpt',
+        default=None,
         help='path of model'
     )
     parser.add_argument(
@@ -105,6 +105,27 @@ def parse_args():
         help='force low VRAM CPU-GPU offload mode (auto-enabled if GPU VRAM <= 36GB)'
     )
     args = parser.parse_args()
+
+    # Automatically resolve checkpoint path
+    if not args.model_path or not os.path.exists(args.model_path):
+        candidates = [
+            "models/model_512/epoch_100.safetensors",
+            "models/model_multisize/epoch_100.safetensors",
+            "models/epoch_100.safetensors",
+            "models/epoch_100.pt",
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                args.model_path = c
+                break
+        if not args.model_path or not os.path.exists(args.model_path):
+            import glob
+            st_files = sorted(glob.glob("models/**/*.safetensors", recursive=True))
+            if st_files:
+                args.model_path = st_files[0]
+            else:
+                args.model_path = "models/model_512/epoch_100.safetensors"
+
     return args
 
 USE_LOW_VRAM = False
@@ -122,6 +143,17 @@ def init_pipeline(args, config, is_low_vram=False):
             gradient_checkpointing=training_config.get("gradient_checkpointing", False),
             byt5_encoder_config=training_config.get("byt5_encoder", None),
         )
+
+    if not os.path.exists(args.model_path):
+        print(f"\n{'='*72}")
+        print(f" [!] FLUX-Text Checkpoint Not Found: {args.model_path}")
+        print(f"{'='*72}")
+        print("[*] To download the official FLUX-Text weights from Hugging Face, run:")
+        print("    python scripts/download_flux_weights.py --type 512")
+        print("    # Or for multi-resolution:")
+        print("    python scripts/download_flux_weights.py --type multisize")
+        print(f"{'='*72}\n")
+        sys.exit(1)
 
     from safetensors.torch import load_file
     state_dict = load_file(args.model_path)
