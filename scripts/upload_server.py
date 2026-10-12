@@ -120,7 +120,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <div class="container">
   <header>
     <h1>Direct Upload Portal</h1>
-    <p class="subtitle">Upload test images, LoRAs, or entire folders into <span class="tag">[repo]/uploaded_stuff</span></p>
+    <p class="subtitle">Upload test images, LoRAs, or entire folders into <span class="tag">uploaded_stuff (NVMe Ephemeral Storage)</span></p>
   </header>
 
   <div class="dropzone" id="dropzone">
@@ -165,7 +165,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <div class="helper-box">
-    <strong>💡 Point your tests to uploaded files:</strong><br>
+    <strong>💡 Uploaded files are routed to NVMe Ephemeral Workspace to preserve root disk:</strong><br>
     Universal Batch Runner: <code>python scripts/batch_inference_runner.py -i ./uploaded_stuff -o ./results</code><br>
     Or subfolder: <code>python scripts/batch_inference_runner.py -i ./uploaded_stuff/my_folder -o ./results</code>
   </div>
@@ -443,10 +443,26 @@ class UploadHandler(BaseHTTPRequestHandler):
         pass
 
 
-def run_upload_server(repo_dir: str, port: int = 7865):
+def run_upload_server(repo_dir: str, port: int = 7865, upload_dir: str = None):
     repo_path = Path(repo_dir).resolve()
-    upload_target = repo_path / "uploaded_stuff"
-    upload_target.mkdir(parents=True, exist_ok=True)
+    if upload_dir:
+        upload_target = Path(upload_dir).resolve()
+    elif Path("/opt/dlami/nvme/workspace/uploaded_stuff").exists():
+        upload_target = Path("/opt/dlami/nvme/workspace/uploaded_stuff").resolve()
+    else:
+        upload_target = repo_path / "uploaded_stuff"
+
+    try:
+        upload_target.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        import subprocess
+        try:
+            subprocess.run(["sudo", "mkdir", "-p", str(upload_target)], check=True)
+            uid = os.getuid() if hasattr(os, "getuid") else 1000
+            gid = os.getgid() if hasattr(os, "getgid") else 1000
+            subprocess.run(["sudo", "chown", "-R", f"{uid}:{gid}", str(upload_target)], check=True)
+        except Exception:
+            pass
 
     UploadHandler.target_dir = upload_target
 
@@ -463,10 +479,11 @@ def run_upload_server(repo_dir: str, port: int = 7865):
 def main():
     parser = argparse.ArgumentParser(description="Direct File & Folder Upload Server")
     parser.add_argument("--repo", "-r", type=str, default=".", help="Repository root path")
+    parser.add_argument("--upload-dir", "-u", type=str, default=None, help="Target upload directory path (overrides [repo]/uploaded_stuff)")
     parser.add_argument("--port", "-p", type=int, default=7865, help="Port to bind (default 7865)")
     args = parser.parse_args()
 
-    run_upload_server(args.repo, args.port)
+    run_upload_server(args.repo, args.port, upload_dir=args.upload_dir)
 
 
 if __name__ == "__main__":

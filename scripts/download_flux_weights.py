@@ -38,13 +38,36 @@ def get_hf_token(cli_token: str = None) -> str:
 
 
 def download_flux_text_weights(dest_dir: str = "./models", model_type: str = "multisize", token: str = None, download_base: bool = False):
-    dest_path = Path(dest_dir).resolve()
+    # Route HF cache and models to NVMe ephemeral storage if available
+    if Path("/opt/dlami/nvme").exists():
+        nvme_ws = Path("/opt/dlami/nvme/workspace")
+        hf_cache = nvme_ws / "cache" / "huggingface"
+        nvme_models = nvme_ws / "models"
+        hf_cache.mkdir(parents=True, exist_ok=True)
+        nvme_models.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("HF_HOME", str(hf_cache))
+
+        if dest_dir == "./models":
+            # Symlink ./models to NVMe models
+            local_models = Path("./models")
+            if not local_models.exists():
+                try:
+                    local_models.symlink_to(nvme_models, target_is_directory=True)
+                except Exception:
+                    pass
+            dest_path = nvme_models
+        else:
+            dest_path = Path(dest_dir).resolve()
+    else:
+        dest_path = Path(dest_dir).resolve()
+
     dest_path.mkdir(parents=True, exist_ok=True)
     resolved_token = get_hf_token(token)
 
     print("=" * 72)
     print("           FLUX-TEXT OFFICIAL WEIGHT DOWNLOADER")
     print(f"[*] Destination Directory : {dest_path}")
+    print(f"[*] HF Cache Target (HF_HOME): {os.environ.get('HF_HOME', '~/.cache/huggingface')}")
     print(f"[*] Target Model Type     : {model_type}")
     print(f"[*] HF Authentication     : {'TOKEN CONFIGURED' if resolved_token else 'ANONYMOUS (Set HF_TOKEN for gated models)'}")
     print("=" * 72)

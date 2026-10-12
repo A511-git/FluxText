@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Blackwell Environment Bootstrap Script (RTX PRO 4500, B100, B200, sm_100/120)
+# Enforces 2-Tier Storage: Persistent /home/ubuntu/working & Ephemeral NVMe
 # ==============================================================================
 
 set -e
@@ -8,7 +9,7 @@ set -e
 # Allow uv to operate seamlessly in system/conda environments
 export UV_SYSTEM_PYTHON=1
 
-echo "=== [1/5] Verifying GPU and System Prerequisites ==="
+echo "=== [1/6] Verifying GPU and System Prerequisites ==="
 if ! command -v nvidia-smi &> /dev/null; then
     echo "ERROR: nvidia-smi not found. NVIDIA driver is not installed or not in PATH."
     exit 1
@@ -36,14 +37,37 @@ if [ -n "$CUDA_HOME" ]; then
     fi
 fi
 
-echo "=== [2/5] Installing uv, ninja, gdown, and modern wheel tooling ==="
+echo "=== [2/6] Provisioning NVMe Ephemeral Workspace (/opt/dlami/nvme/workspace) ==="
+if [ -d "/opt/dlami/nvme" ]; then
+    sudo mkdir -p /opt/dlami/nvme/workspace/cache/huggingface
+    sudo mkdir -p /opt/dlami/nvme/workspace/uploaded_stuff
+    sudo mkdir -p /opt/dlami/nvme/workspace/results
+    sudo mkdir -p /opt/dlami/nvme/workspace/models
+    sudo chown -R $(id -u):$(id -g) /opt/dlami/nvme/workspace
+    echo "[+] NVMe Ephemeral Workspace subdirectories provisioned with user permissions."
+
+    # Create repo symlinks if running from inside a git repo
+    for item in uploaded_stuff results models; do
+        if [ ! -e "$item" ]; then
+            ln -s "/opt/dlami/nvme/workspace/$item" "$item" 2>/dev/null || true
+            echo "[+] Linked ./$item -> /opt/dlami/nvme/workspace/$item"
+        fi
+    done
+    if [ ! -e "nvme_workspace" ]; then
+        ln -s "/opt/dlami/nvme/workspace" "nvme_workspace" 2>/dev/null || true
+    fi
+else
+    echo "[*] Notice: /opt/dlami/nvme not found. Using local workspace fallback."
+fi
+
+echo "=== [3/6] Installing uv, ninja, gdown, and modern wheel tooling ==="
 pip install uv ninja gdown
 uv pip install --upgrade setuptools wheel
 
-echo "=== [3/5] Installing PyTorch with CUDA 12.8 (Blackwell SM_100/SM_120 Support) ==="
+echo "=== [4/6] Installing PyTorch with CUDA 12.8 (Blackwell SM_100/SM_120 Support) ==="
 uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 
-echo "=== [4/5] Patching PyTorch cpp_extension to bypass NVCC version mismatch ==="
+echo "=== [5/6] Patching PyTorch cpp_extension to bypass NVCC version mismatch ==="
 python -c '
 import torch.utils.cpp_extension as ce
 p = ce.__file__
@@ -60,10 +84,11 @@ if target in src:
 export FORCE_CUDA=1
 export TORCH_CUDA_ARCH_LIST="12.0;10.0"
 
-echo "=== [5/5] Running Hardware Diagnostic ==="
+echo "=== [6/6] Running Hardware Diagnostic ==="
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python "$SCRIPT_DIR/check_blackwell_env.py"
 
 echo "=================================================================="
 echo " Blackwell environment is bootstrapped and verified!"
+echo " 2-Tier Storage: Persistent /home/ubuntu/working & Ephemeral NVMe ready."
 echo "=================================================================="

@@ -50,6 +50,16 @@ def ensure_gdown():
 
 
 def verify_and_download_hf(model_name, url_or_repo, target_dir="weights", token: str = None):
+    if Path("/opt/dlami/nvme").exists():
+        nvme_ws = Path("/opt/dlami/nvme/workspace")
+        hf_cache = nvme_ws / "cache" / "huggingface"
+        hf_cache.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("HF_HOME", str(hf_cache))
+        if target_dir in ("weights", "./models", "models"):
+            nvme_models = nvme_ws / "models"
+            nvme_models.mkdir(parents=True, exist_ok=True)
+            target_dir = str(nvme_models)
+
     os.makedirs(target_dir, exist_ok=True)
     target_path = os.path.join(target_dir, model_name)
     resolved_token = get_hf_token(token)

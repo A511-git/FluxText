@@ -19,7 +19,10 @@ def find_valid_images(folder_path, recursive=False):
     """
     folder = Path(folder_path)
     if not folder.exists():
-        raise FileNotFoundError(f"Input directory does not exist: {folder_path}")
+        raise FileNotFoundError(
+            f"Input directory does not exist: {folder_path}. "
+            f"Please upload images via Link 1 (Upload Portal) into ./uploaded_stuff first."
+        )
 
     pattern = "**/*" if recursive else "*"
     images = [
@@ -42,10 +45,11 @@ def run_batch_inference_pipeline(input_dir, output_dir, inference_fn=None, recur
     images = find_valid_images(input_dir, recursive=recursive)
     print(f"[*] Found {len(images)} valid images in '{input_dir}'")
     if not images:
-        print("[!] No images found to process.")
+        print("[!] No images found to process. Upload test images via Link 1 into ./uploaded_stuff")
         return []
 
-    os.makedirs(output_dir, exist_ok=True)
+    out_folder = Path(output_dir)
+    out_folder.mkdir(parents=True, exist_ok=True)
     results = []
 
     try:

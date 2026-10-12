@@ -1,21 +1,34 @@
 # Quickstart Runbook for FluxText
-> Blackwell GPU Docker Container & Host Remote Bridge Guide
+> Blackwell GPU Docker Container & 2-Tier Storage Remote Bridge Guide
 
-This repository is configured to run inside a high-performance **NVIDIA Blackwell GPU Docker container**, while keeping the **Cloudflare Remote Bridge strictly on the host system** so web links and file uploads never disconnect during container restarts.
+This repository is configured to run inside a high-performance **NVIDIA Blackwell GPU Docker container**, while enforcing a **strict 2-tier storage architecture**:
+1. **Persistent Storage (72 GB)** at `/home/ubuntu/working/FluxText` (Source code, git history, configs).
+2. **Ephemeral NVMe Workspace (410 GB)** at `/opt/dlami/nvme/workspace` (Hugging Face cache, checkpoints, uploaded files, and batch inference results).
+
+The **Cloudflare Remote Bridge runs strictly on the host system** so web links and file uploads never disconnect during container restarts.
 
 ---
 
-## Architecture Overview
+## Architecture Overview (2-Tier Storage Layout)
 
 ```
-Host System (Outside Docker)
- ├── Remote Bridge Daemon (Cloudflare Tunnels)
- │    ├── [CONFIRMED LINK 1] Upload Portal UI  --> Saves to host ./uploaded_stuff
- │    ├── [CONFIRMED LINK 2] Repo HTTP Viewer  --> Browses host ./ (results, logs, code)
- │    └── [OPTIONAL  LINK 3] Inbuilt Gradio    --> Proxies container port 6681
- └── Host Storages (Mounted into Container)
-      ├── ./ (entire repo)       --> Mounted to /workspace/FluxText
-      └── ~/.cache/huggingface   --> Mounted to /root/.cache/huggingface
+Persistent Storage (/home/ubuntu/working/ - 72 GB)
+ └── FluxText/ (Code, Git history, .env, configs)
+      ├── ./uploaded_stuff ➔ Symlinked to NVMe workspace/uploaded_stuff
+      ├── ./results        ➔ Symlinked to NVMe workspace/results
+      ├── ./models         ➔ Symlinked to NVMe workspace/models
+      └── ./nvme_workspace ➔ Symlinked to NVMe /opt/dlami/nvme/workspace
+
+NVMe Ephemeral Storage (/opt/dlami/nvme/workspace/ - 410 GB)
+ ├── cache/huggingface/ (Base models & checkpoints)
+ ├── uploaded_stuff/    (User uploaded assets & folders via Link 1)
+ ├── results/           (Inference outputs & generated images via Link 2)
+ └── models/            (FLUX-Text checkpoints & custom LoRAs)
+
+Host System Remote Bridge Daemon (Cloudflare Tunnels)
+ ├── [CONFIRMED LINK 1] Upload Portal UI  --> Saves directly to NVMe uploaded_stuff
+ ├── [CONFIRMED LINK 2] Repo HTTP Viewer  --> Browses code, results, nvme_workspace
+ └── [OPTIONAL  LINK 3] Inbuilt Frontend  --> Proxies container port 6681
 ```
 
 ---
@@ -40,8 +53,8 @@ cat .remote_bridge/bridge_links.md
 ```
 
 You will get 2 confirmed active links (and 1 optional frontend link):
-- **[CONFIRMED LINK 1] Upload Portal**: Drag-and-drop test images, weights, or entire folders from your browser directly into `./uploaded_stuff/`.
-- **[CONFIRMED LINK 2] Repo HTTP Viewer**: Browse and download code, logs, and generated images in `./results/` directly in your browser.
+- **[CONFIRMED LINK 1] Upload Portal**: Drag-and-drop test images, weights, or entire folders from your browser directly into NVMe `./uploaded_stuff/`.
+- **[CONFIRMED LINK 2] Repo HTTP Viewer**: Browse and download code, logs, and generated images in `./results/` and `./nvme_workspace/` directly in your browser.
 - **[OPTIONAL  LINK 3] Inbuilt Frontend**: Online public link for the Gradio interface (mapped from container port `6681`).
 
 ---

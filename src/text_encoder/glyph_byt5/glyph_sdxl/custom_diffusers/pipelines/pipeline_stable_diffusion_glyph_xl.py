@@ -5,31 +5,76 @@ import torch
 from transformers import T5EncoderModel, T5Tokenizer
 import torch.nn.functional as F
 
-from diffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl import (
-    StableDiffusionXLPipeline,
-    AutoencoderKL,
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-    UNet2DConditionModel,
-    KarrasDiffusionSchedulers,
-    CLIPVisionModelWithProjection,
-    CLIPImageProcessor,
-    VaeImageProcessor,
-    is_invisible_watermark_available,
-    StableDiffusionXLLoraLoaderMixin,
-    PipelineImageInput,
-    adjust_lora_scale_text_encoder,
-    scale_lora_layers,
-    unscale_lora_layers,
-    USE_PEFT_BACKEND,
-    StableDiffusionXLPipelineOutput,
-    ImageProjection,
-    logging,
-    rescale_noise_cfg,
-    retrieve_timesteps,
-    deprecate,
-)
+try:
+    from diffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl import (
+        StableDiffusionXLPipeline,
+        AutoencoderKL,
+        CLIPTextModel,
+        CLIPTextModelWithProjection,
+        CLIPTokenizer,
+        UNet2DConditionModel,
+        KarrasDiffusionSchedulers,
+        CLIPVisionModelWithProjection,
+        CLIPImageProcessor,
+        VaeImageProcessor,
+        is_invisible_watermark_available,
+        StableDiffusionXLLoraLoaderMixin,
+        PipelineImageInput,
+        adjust_lora_scale_text_encoder,
+        scale_lora_layers,
+        unscale_lora_layers,
+        USE_PEFT_BACKEND,
+        StableDiffusionXLPipelineOutput,
+        ImageProjection,
+        logging,
+        rescale_noise_cfg,
+        retrieve_timesteps,
+        deprecate,
+    )
+except ImportError:
+    from diffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl import (
+        StableDiffusionXLPipeline,
+        AutoencoderKL,
+        CLIPTextModel,
+        CLIPTextModelWithProjection,
+        CLIPTokenizer,
+        UNet2DConditionModel,
+        KarrasDiffusionSchedulers,
+        CLIPVisionModelWithProjection,
+        CLIPImageProcessor,
+        VaeImageProcessor,
+        is_invisible_watermark_available,
+        StableDiffusionXLLoraLoaderMixin,
+        PipelineImageInput,
+        StableDiffusionXLPipelineOutput,
+        ImageProjection,
+        logging,
+        rescale_noise_cfg,
+        retrieve_timesteps,
+    )
+    try:
+        from diffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl import deprecate
+    except ImportError:
+        try:
+            from diffusers.utils import deprecate
+        except ImportError:
+            def deprecate(*args, **kwargs): pass
+    try:
+        from diffusers.utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers
+    except ImportError:
+        try:
+            from diffusers.utils.peft_utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers
+        except ImportError:
+            USE_PEFT_BACKEND = False
+            def scale_lora_layers(model, weight=1.0): pass
+            def unscale_lora_layers(model, weight=1.0): pass
+    try:
+        from diffusers.models.lora import adjust_lora_scale_text_encoder
+    except ImportError:
+        try:
+            from diffusers.loaders.lora_pipeline import adjust_lora_scale_text_encoder
+        except ImportError:
+            def adjust_lora_scale_text_encoder(text_encoder, lora_scale): pass
 import numpy as np
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 

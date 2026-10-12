@@ -121,10 +121,13 @@ def generate_docker_compose_yaml(service_name: str, repo_name: str, frontend_por
       - HF_TOKEN=${{HF_TOKEN:-}}
       - HUGGING_FACE_HUB_TOKEN=${{HF_TOKEN:-}}
 {ports_section}    volumes:
-      # Mount entire repository into /workspace/{repo_name}
+      # Mount repository code into /workspace/{repo_name} (from persistent 72 GB storage)
       - ./:/workspace/{repo_name}
-      # Cache stored directly on /opt/dlami/nvme (382 GB)
-      - /opt/dlami/nvme/cache/huggingface:/root/.cache/huggingface
+      # NVMe Ephemeral Workspace Storage (410 GB) - all heavy/temp data
+      - /opt/dlami/nvme/workspace/cache/huggingface:/root/.cache/huggingface
+      - /opt/dlami/nvme/workspace/uploaded_stuff:/workspace/{repo_name}/uploaded_stuff
+      - /opt/dlami/nvme/workspace/results:/workspace/{repo_name}/results
+      - /opt/dlami/nvme/workspace/models:/workspace/{repo_name}/models
     ipc: host
     stdin_open: true
     tty: true
@@ -148,23 +151,36 @@ The frontend binds to port `{frontend_port}` inside the container, which is forw
 """
 
     return f"""# Quickstart Runbook for {repo_name}
-> Automated Blackwell GPU Container & Remote Bridge Guide
+> Automated Blackwell GPU Container & 2-Tier Storage Remote Bridge Guide
 
-This repository is configured to run inside a high-performance **NVIDIA Blackwell GPU Docker container**, while keeping the **Cloudflare Remote Bridge strictly on the host system** so web links and file uploads never disconnect during container restarts.
+This repository is configured to run inside a high-performance **NVIDIA Blackwell GPU Docker container**, while enforcing a **strict 2-tier storage architecture**:
+1. **Persistent Storage (72 GB)** at `/home/ubuntu/working` (Source code, git history, configs).
+2. **Ephemeral NVMe Workspace (410 GB)** at `/opt/dlami/nvme/workspace` (Hugging Face cache, checkpoints, uploaded files, and inference results).
+
+The **Cloudflare Remote Bridge runs strictly on the host system** so web links and file uploads never disconnect during container restarts.
 
 ---
 
-## Architecture Overview
+## Architecture Overview (2-Tier Storage Layout)
 
 ```
-Host System (Outside Docker)
- ├── Remote Bridge Daemon (Cloudflare Tunnels)
- │    ├── Confirmed Link 1: Upload Portal UI  --> Saves to host ./uploaded_stuff
- │    ├── Confirmed Link 2: Repo HTTP Viewer  --> Browses host ./
- │    └── Optional  Link 3: Inbuilt Frontend  --> Proxies port {frontend_port}
- └── Host Storages (Mounted into Container)
-      ├── ./ (entire repo)       --> Mounted to /workspace/{repo_name}
-      └── ~/.cache/huggingface   --> Mounted to /root/.cache/huggingface
+Persistent Storage (/home/ubuntu/working/ - 72 GB)
+ └── {repo_name}/ (Code, Git history, .env, configs)
+      ├── ./uploaded_stuff ➔ Symlinked to NVMe workspace/uploaded_stuff
+      ├── ./results        ➔ Symlinked to NVMe workspace/results
+      ├── ./models         ➔ Symlinked to NVMe workspace/models
+      └── ./nvme_workspace ➔ Symlinked to NVMe /opt/dlami/nvme/workspace
+
+NVMe Ephemeral Storage (/opt/dlami/nvme/workspace/ - 410 GB)
+ ├── cache/huggingface/ (Base models & checkpoints)
+ ├── uploaded_stuff/    (User uploaded assets & folders via Link 1)
+ ├── results/           (Inference outputs & generated images via Link 2)
+ └── models/            (Custom weights & fine-tunes)
+
+Host System Remote Bridge Daemon (Cloudflare Tunnels)
+ ├── [CONFIRMED LINK 1] Upload Portal UI  --> Saves directly to NVMe uploaded_stuff
+ ├── [CONFIRMED LINK 2] Repo HTTP Viewer  --> Browses code, results, nvme_workspace
+ └── [OPTIONAL  LINK 3] Inbuilt Frontend  --> Proxies container port {frontend_port}
 ```
 
 ---
@@ -269,11 +285,43 @@ class DockerSetupGenerator:
         print(f"[*] Container Workdir : /workspace/{repo_name}")
         print("=" * 70)
 
-        # 1. Ensure required host storage mount folders exist
-        uploaded_dir = self.repo_dir / "uploaded_stuff"
-        results_dir = self.repo_dir / "results"
-        uploaded_dir.mkdir(parents=True, exist_ok=True)
-        results_dir.mkdir(parents=True, exist_ok=True)
+        # 1. Ensure 2-tier storage layout & NVMe workspace exist
+        nvme_base = Path("/opt/dlami/nvme")
+        if nvme_base.exists():
+            workspace_dir = nvme_base / "workspace"
+            try:
+                workspace_dir.mkdir(parents=True, exist_ok=True)
+            except PermissionError:
+                import subprocess
+                subprocess.run(["sudo", "mkdir", "-p", str(workspace_dir)], check=False)
+                uid = os.getuid() if hasattr(os, "getuid") else 1000
+                gid = os.getgid() if hasattr(os, "getgid") else 1000
+                subprocess.run(["sudo", "chown", "-R", f"{uid}:{gid}", str(workspace_dir)], check=False)
+
+            for sub in ["uploaded_stuff", "results", "models", "cache/huggingface"]:
+                (workspace_dir / sub).mkdir(parents=True, exist_ok=True)
+
+            # Symlink in repo
+            for link_name, target in [("uploaded_stuff", workspace_dir / "uploaded_stuff"),
+                                      ("results", workspace_dir / "results"),
+                                      ("models", workspace_dir / "models"),
+                                      ("nvme_workspace", workspace_dir)]:
+                lp = self.repo_dir / link_name
+                try:
+                    if lp.is_symlink():
+                        if lp.resolve() == target.resolve():
+                            continue
+                        lp.unlink()
+                    elif lp.is_dir() and not any(lp.iterdir()):
+                        lp.rmdir()
+                    if not lp.exists():
+                        lp.symlink_to(target, target_is_directory=True)
+                except Exception:
+                    pass
+        else:
+            (self.repo_dir / "uploaded_stuff").mkdir(parents=True, exist_ok=True)
+            (self.repo_dir / "results").mkdir(parents=True, exist_ok=True)
+            (self.repo_dir / "models").mkdir(parents=True, exist_ok=True)
 
         # 2. Write Dockerfile
         dockerfile_path = self.repo_dir / "Dockerfile"

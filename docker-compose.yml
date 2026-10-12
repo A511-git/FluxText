@@ -26,10 +26,13 @@ services:
       # ComfyUI port mapped to host (if used)
       - "8188:8188"
     volumes:
-      # Mount entire repo into /workspace/FluxText
+      # Mount entire repo into /workspace/FluxText (from persistent 72 GB storage)
       - ./:/workspace/FluxText
-      # Cache stored directly on /opt/dlami/nvme (382 GB)
-      - /opt/dlami/nvme/cache/huggingface:/root/.cache/huggingface
+      # NVMe Ephemeral Workspace Storage (410 GB) - all heavy/temp data
+      - /opt/dlami/nvme/workspace/cache/huggingface:/root/.cache/huggingface
+      - /opt/dlami/nvme/workspace/uploaded_stuff:/workspace/FluxText/uploaded_stuff
+      - /opt/dlami/nvme/workspace/results:/workspace/FluxText/results
+      - /opt/dlami/nvme/workspace/models:/workspace/FluxText/models
     ipc: host
     stdin_open: true
     tty: true
