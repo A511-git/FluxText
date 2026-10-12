@@ -198,6 +198,20 @@ def update_mask_func(edit_mask, edit_text):
     return hint, glyphs, caption
 
 def generate_image_func(prompt, img, glyph_img, mask_img, seed):
+    if img is None:
+        raise gr.Error("Please upload an Image, or select one of the Examples below.")
+    if mask_img is None:
+        raise gr.Error("Missing 'mask Image'. Please upload a mask, or enable 'manual edit' to paint one and click 'Generate glyph and mask'.")
+    if glyph_img is None:
+        raise gr.Error("Missing 'glyph Image'. Please upload a glyph image, or enable 'manual edit' to generate one.")
+
+    if isinstance(img, np.ndarray):
+        img = Image.fromarray(img)
+    if isinstance(mask_img, np.ndarray):
+        mask_img = Image.fromarray(mask_img)
+    if isinstance(glyph_img, np.ndarray):
+        glyph_img = Image.fromarray(glyph_img)
+
     ori_width, ori_height = img.size
     num_pixel = min(PIXELS, key=lambda x: abs(x - ori_width * ori_height))
     aspect_ratio_dict = get_aspect_ratios_dict(num_pixel)
