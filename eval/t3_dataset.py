@@ -89,24 +89,35 @@ def draw_glyph2(font, text, polygon, vertAng=10, scale=1, width=512, height=512,
     img = Image.fromarray(img)
 
     # infer font size
+    if not text or not str(text).strip():
+        text = " "
     image4ratio = Image.new("RGB", img.size, "white")
     draw = ImageDraw.Draw(image4ratio)
     _, _, _tw, _th = draw.textbbox(xy=(0, 0), text=text, font=font)
-    text_w = min(w, h) * (_tw / _th)
-    if text_w <= max(w, h):
+    _th = max(_th, 1)
+    _tw = max(_tw, 1)
+    w_safe = max(float(w), 1.0)
+    h_safe = max(float(h), 1.0)
+    min_dim = min(w_safe, h_safe)
+    max_dim = max(w_safe, h_safe)
+
+    text_w = min_dim * (_tw / _th)
+    if text_w <= max_dim:
         # add space
         if len(text) > 1 and not vert and add_space:
             for i in range(1, 100):
                 text_space = insert_spaces(text, i)
                 _, _, _tw2, _th2 = draw.textbbox(xy=(0, 0), text=text_space, font=font)
-                if min(w, h) * (_tw2 / _th2) > max(w, h):
+                _th2 = max(_th2, 1)
+                if min_dim * (_tw2 / _th2) > max_dim:
                     break
             text = insert_spaces(text, i-1)
-        font_size = min(w, h)*0.80
+        font_size = max(int(min_dim * 0.80), 8)
     else:
         shrink = 0.75 if vert else 0.85
-        font_size = min(w, h) / (text_w/max(w, h)) * shrink
-    new_font = font.font_variant(size=int(font_size))
+        scale_factor = max(text_w / max_dim, 0.01)
+        font_size = max(int((min_dim / scale_factor) * shrink), 8)
+    new_font = font.font_variant(size=font_size)
 
     left, top, right, bottom = new_font.getbbox(text)
     text_width = right-left

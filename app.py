@@ -238,6 +238,9 @@ def get_captions(ori_image, _input_file):
 def get_glyph_pos(mask, _input_file, width, height):
     mask = mask.astype('uint8')
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        raise gr.Error("No brush stroke detected! Please draw a visible white stroke over the text area.")
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
     hint = mask / 255
     glyph_scale = 1
     glyphs = draw_glyph2(selffont, _input_file, contours[0], scale=glyph_scale, width=width, height=height)
@@ -245,11 +248,18 @@ def get_glyph_pos(mask, _input_file, width, height):
     return hint, glyphs
 
 def brush_button_func(brush_image):
+    if not brush_image or 'layers' not in brush_image or not brush_image['layers']:
+        raise gr.Error("No brush stroke found! Please paint over the text region you want to edit.")
     _mask = brush_image['layers'][0][:, :, :3]
-    _mask = np.where(_mask > 0, 255, 0)
+    _mask = np.where(_mask > 0, 255, 0).astype(np.uint8)
     return _mask[:,:,0], [_mask[:,:,0]]
 
 def update_mask_func(edit_mask, edit_text):
+    if not edit_mask or 'background' not in edit_mask or edit_mask['background'] is None:
+        raise gr.Error("Please upload an image into the editor first!")
+    if not edit_text or not str(edit_text).strip():
+        raise gr.Error("Please enter text into 'Input text' before clicking 'Generate glyph and mask'.")
+
     background = edit_mask['background']
     background = background[:, :, :3]
     mask, _ = brush_button_func(edit_mask)
