@@ -271,13 +271,17 @@ def update_mask_func(edit_mask, edit_text):
     caption = get_captions(background, edit_text)
     return hint, glyphs, caption
 
-def generate_image_func(prompt, img, glyph_img, mask_img, seed):
+def generate_image_func(prompt, img, glyph_img=None, mask_img=None, seed=42, edit_mask=None, edit_text=""):
+    # 1. Ensure base image exists (fallback to edit_mask background if present)
+    if img is None and edit_mask is not None and isinstance(edit_mask, dict) and edit_mask.get('background') is not None:
+        bg = edit_mask['background']
+        if isinstance(bg, np.ndarray):
+            img = Image.fromarray(bg[:, :, :3].astype(np.uint8))
+        elif isinstance(bg, Image.Image):
+            img = bg
+
     if img is None:
         raise gr.Error("Please upload an Image, or select one of the Examples below.")
-    if mask_img is None:
-        raise gr.Error("Missing 'mask Image'. Please upload a mask, or enable 'manual edit' to paint one and click 'Generate glyph and mask'.")
-    if glyph_img is None:
-        raise gr.Error("Missing 'glyph Image'. Please upload a glyph image, or enable 'manual edit' to generate one.")
 
     if isinstance(img, np.ndarray):
         img = Image.fromarray(img)
@@ -291,7 +295,90 @@ def generate_image_func(prompt, img, glyph_img, mask_img, seed):
     aspect_ratio_dict = get_aspect_ratios_dict(num_pixel)
     close_ratio = get_closest_ratio(ori_height, ori_width, ASPECT_RATIO_LD_LIST)
     tgt_height, tgt_width = aspect_ratio_dict[close_ratio]
-    
+
+    # 2. Check if mask can be recovered from manual edit canvas
+    if mask_img is None and edit_mask is not None and isinstance(edit_mask, dict):
+        layers = edit_mask.get('layers', [])
+        if layers and len(layers) > 0 and layers[0] is not None:
+            raw_layer = layers[0][:, :, :3]
+            if np.any(raw_layer > 0):
+                mask_np = np.where(raw_layer[:, :, 0] > 0, 255, 0).astype(np.uint8)
+                mask_img = Image.fromarray(mask_np)
+
+    # 3. Detect text specified in edit_text or prompt
+    import re
+    text_to_draw = None
+    if edit_text and str(edit_text).strip():
+        text_to_draw = str(edit_text).strip()
+    elif prompt:
+        p_str = str(prompt).strip()
+        p_lower = p_str.lower()
+        if "that reads" in p_lower:
+            idx = p_lower.find("that reads") + len("that reads")
+            text_to_draw = p_str[idx:].strip().strip('.:,"\'')
+        elif "written materials on the picture:" in p_lower:
+            idx = p_lower.find("written materials on the picture:") + len("written materials on the picture:")
+            text_to_draw = p_str[idx:].strip().strip('.:,"\'')
+        elif "with the text" in p_lower:
+            idx = p_lower.find("with the text") + len("with the text")
+            text_to_draw = p_str[idx:].strip().strip('.:,"\'')
+        elif "with text" in p_lower:
+            idx = p_lower.find("with text") + len("with text")
+            text_to_draw = p_str[idx:].strip().strip('.:,"\'')
+        else:
+            match = re.search(r'["\']([^"\']+)["\']', p_str)
+            if match:
+                text_to_draw = match.group(1).strip()
+
+    # 4. If glyph is missing but we have mask and text, auto-generate glyph
+    if glyph_img is None and mask_img is not None and text_to_draw:
+        try:
+            m_np = np.array(mask_img.convert('L'))
+            contours, _ = cv2.findContours(m_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                contours = sorted(contours, key=cv2.contourArea, reverse=True)
+                _, g_np = get_glyph_pos(m_np, text_to_draw, m_np.shape[1], m_np.shape[0])
+                g_np = (1 - g_np.astype('uint8')) * 255
+                glyph_img = Image.fromarray(g_np[:, :, 0])
+        except Exception as e:
+            print(f"[*] Notice auto-generating glyph: {e}")
+
+    # 5. If mask is STILL missing:
+    if mask_img is None:
+        if text_to_draw:
+            font_to_use = selffont
+            try:
+                target_text_w = min(tgt_width * 0.75, 500)
+                font_size = max(int(target_text_w / max(len(text_to_draw), 1)), 24)
+                font_to_use = selffont.font_variant(size=font_size)
+            except Exception:
+                font_to_use = selffont
+
+            # Auto-create centered text layout & mask
+            glyph_canvas = Image.new("RGB", (tgt_width, tgt_height), (255, 255, 255))
+            d = ImageDraw.Draw(glyph_canvas)
+            bbox = d.textbbox((0, 0), text_to_draw, font=font_to_use)
+            tw, th = max(bbox[2] - bbox[0], 10), max(bbox[3] - bbox[1], 10)
+            tx = max((tgt_width - tw) // 2, 10)
+            ty = max((tgt_height - th) // 2, 10)
+            d.text((tx, ty), text_to_draw, font=font_to_use, fill=(0, 0, 0))
+            glyph_img = glyph_canvas
+
+            mask_canvas = Image.new("L", (tgt_width, tgt_height), 0)
+            dm = ImageDraw.Draw(mask_canvas)
+            pad_x = max(int(tw * 0.08), 20)
+            pad_y = max(int(th * 0.15), 15)
+            dm.rectangle([max(tx - pad_x, 0), max(ty - pad_y, 0), min(tx + tw + pad_x, tgt_width), min(ty + th + pad_y, tgt_height)], fill=255)
+            mask_img = mask_canvas
+        else:
+            # Full inpainting/generative mode: entire image is masked
+            mask_img = Image.new("L", (tgt_width, tgt_height), 255)
+
+    # 6. If glyph is STILL missing:
+    if glyph_img is None:
+        # Default blank white canvas (no constraint on generation)
+        glyph_img = Image.new("RGB", (tgt_width, tgt_height), (255, 255, 255))
+
     hint = mask_img.resize((tgt_width, tgt_height)).convert('RGB')
     img = img.resize((tgt_width, tgt_height))
     condition_img = glyph_img.resize((tgt_width, tgt_height)).convert('RGB')
@@ -305,7 +392,8 @@ def generate_image_func(prompt, img, glyph_img, mask_img, seed):
                     condition=condition_img,
                     position_delta=position_delta,
                 )
-    generator.manual_seed(seed)
+    seed_val = int(seed) if seed is not None else 42
+    generator.manual_seed(seed_val)
     gen_func = generate_fill_low_RAM if USE_LOW_VRAM else generate_fill
     res = gen_func(
         pipe,
@@ -380,7 +468,7 @@ with gr.Blocks() as demo:
     )
     single_generate_btn.click(
         generate_image_func,
-        inputs=[prompt, img, glyph_img, mask_img, seed],
+        inputs=[prompt, img, glyph_img, mask_img, seed, edit_mask, edit_text],
         outputs=single_output_image
     )
     mode_select.change(
