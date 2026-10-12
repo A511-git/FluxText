@@ -1,0 +1,46 @@
+# ==============================================================================
+# FLUX-Text Master Configuration File
+# Unified settings for model paths, checkpoint resolution, hardware, and server
+# ==============================================================================
+
+model:
+  # Resolution mode: "512" (512x512 fixed) or "multisize" (multi-resolution aspect ratios)
+  type: "512"
+
+  # Path to FLUX-Text LoRA checkpoint file (auto-detected or auto-downloaded if missing)
+  checkpoint_path: "models/model_512/epoch_100.safetensors"
+
+  # Training/Architecture configuration file
+  config_path: "train/config/word_512_size.yaml"
+
+  # Font used for glyph generation and text rendering
+  font_path: "font/Arial_Unicode.ttf"
+
+  # Base model path or HuggingFace ID
+  flux_path: "black-forest-labs/FLUX.1-Fill-dev"
+
+  # BLIP-2 image captioning model
+  blip_path: "Salesforce/blip2-opt-2.7b"
+
+download:
+  # Auto-download LoRA checkpoint from Hugging Face if not found locally
+  auto_download: true
+
+  # Official FLUX-Text Hugging Face repository
+  hf_repo: "GD-ML/FLUX-Text"
+
+server:
+  # Gradio server binding
+  host: "0.0.0.0"
+  port: 6681
+  share: false
+
+hardware:
+  # Low-VRAM CPU offloading mode: "auto" (enabled when VRAM < 36GB), true, or false
+  low_vram: "auto"
+  device: "cuda"
+
+paths:
+  models_dir: "models"
+  uploaded_dir: "uploaded_stuff"
+  results_dir: "results"

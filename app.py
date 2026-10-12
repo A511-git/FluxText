@@ -85,48 +85,111 @@ def get_aspect_ratios_dict(
 
     return aspect_ratios_dict
 
+def load_app_config(config_file="config.yaml"):
+    """Loads root config.yaml if present."""
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                return yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"[!] Notice reading {config_file}: {e}")
+    return {}
+
+APP_CONFIG = load_app_config()
+
+def ensure_checkpoint(model_path: str = None, model_type: str = "512") -> str:
+    """Ensures model checkpoint exists, auto-downloading from Hugging Face if missing."""
+    if model_path and os.path.exists(model_path):
+        return model_path
+
+    # Check common alternative locations
+    candidates = [
+        "models/model_512/epoch_100.safetensors",
+        "models/model_multisize/epoch_100.safetensors",
+        "models/epoch_100.safetensors",
+        f"models/model_{model_type}/epoch_100.safetensors",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            print(f"[+] Found existing checkpoint: {c}")
+            return c
+
+    # Search recursively for any safetensors in models/
+    import glob
+    found = sorted(glob.glob("models/**/*.safetensors", recursive=True))
+    if found:
+        print(f"[+] Found existing checkpoint: {found[0]}")
+        return found[0]
+
+    # Auto-download from Hugging Face
+    target_sub = f"model_{model_type}" if model_type in ("512", "multisize") else "model_512"
+    filename = f"{target_sub}/epoch_100.safetensors"
+    print("=" * 72)
+    print(f"[*] FLUX-Text checkpoint '{model_path or filename}' not found locally.")
+    print(f"[*] Auto-downloading '{filename}' from Hugging Face (GD-ML/FLUX-Text)...")
+    print("=" * 72)
+
+    try:
+        from huggingface_hub import hf_hub_download
+        os.makedirs("models", exist_ok=True)
+        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        downloaded = hf_hub_download(
+            repo_id="GD-ML/FLUX-Text",
+            filename=filename,
+            local_dir="models",
+            local_dir_use_symlinks=False,
+            token=token,
+        )
+        print(f"[+] Checkpoint successfully downloaded to: {downloaded}")
+        return downloaded
+    except Exception as e:
+        print(f"[!] Auto-download failed: {e}")
+        print(f"[*] You can manually download via: python scripts/download_flux_weights.py --type {model_type}")
+        raise FileNotFoundError(f"Checkpoint {filename} could not be found or downloaded.")
+
+
 def parse_args():
+    cfg_model = APP_CONFIG.get("model", {})
+    cfg_hw = APP_CONFIG.get("hardware", {})
+
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="config.yaml",
+        help="Path to master config.yaml"
+    )
     parser.add_argument(
         "--model_path",
         type=str,
-        default=None,
-        help='path of model'
+        default=cfg_model.get("checkpoint_path", None),
+        help='path of model checkpoint (defaults to config.yaml setting)'
     )
     parser.add_argument(
         '--config_path',
         type=str,
-        default='train/config/word_512_size.yaml',
+        default=cfg_model.get("config_path", 'train/config/word_512_size.yaml'),
         help='path of config file (default: train/config/word_512_size.yaml)'
+    )
+    parser.add_argument(
+        '--type',
+        type=str,
+        default=cfg_model.get("type", "512"),
+        choices=["512", "multisize"],
+        help='model type/resolution (default: 512)'
     )
     parser.add_argument(
         '--low_vram',
         action='store_true',
+        default=True if cfg_hw.get("low_vram") is True else False,
         help='force low VRAM CPU-GPU offload mode (auto-enabled if GPU VRAM <= 36GB)'
     )
     args = parser.parse_args()
 
-    # Automatically resolve checkpoint path
-    if not args.model_path or not os.path.exists(args.model_path):
-        candidates = [
-            "models/model_512/epoch_100.safetensors",
-            "models/model_multisize/epoch_100.safetensors",
-            "models/epoch_100.safetensors",
-            "models/epoch_100.pt",
-        ]
-        for c in candidates:
-            if os.path.exists(c):
-                args.model_path = c
-                break
-        if not args.model_path or not os.path.exists(args.model_path):
-            import glob
-            st_files = sorted(glob.glob("models/**/*.safetensors", recursive=True))
-            if st_files:
-                args.model_path = st_files[0]
-            else:
-                args.model_path = "models/model_512/epoch_100.safetensors"
-
+    # Automatically ensure checkpoint exists (downloading if missing)
+    args.model_path = ensure_checkpoint(args.model_path, model_type=args.type)
     return args
+
 
 USE_LOW_VRAM = False
 
@@ -144,24 +207,13 @@ def init_pipeline(args, config, is_low_vram=False):
             byt5_encoder_config=training_config.get("byt5_encoder", None),
         )
 
-    if not os.path.exists(args.model_path):
-        print(f"\n{'='*72}")
-        print(f" [!] FLUX-Text Checkpoint Not Found: {args.model_path}")
-        print(f"{'='*72}")
-        print("[*] To download the official FLUX-Text weights from Hugging Face, run:")
-        print("    python scripts/download_flux_weights.py --type 512")
-        print("    # Or for multi-resolution:")
-        print("    python scripts/download_flux_weights.py --type multisize")
-        print(f"{'='*72}\n")
-        sys.exit(1)
-
     from safetensors.torch import load_file
+    print(f"[*] Loading FLUX-Text LoRA weights from: {args.model_path}")
     state_dict = load_file(args.model_path)
     state_dict1 = {x.replace('lora_A', 'lora_A.default').replace('lora_B', 'lora_B.default').replace('transformer.', ''): v for x, v in state_dict.items()}
     trainable_model.transformer.load_state_dict(state_dict1, strict=False)
 
     pipe = trainable_model.flux_pipe
-    
     return pipe, trainable_model
 
 def get_captions(ori_image, _input_file):
@@ -316,17 +368,32 @@ with gr.Blocks() as demo:
     )
 
 if __name__ == '__main__':
-    font_path='./font/Arial_Unicode.ttf'
-    selffont = ImageFont.truetype(font_path, size=60)
     args = parse_args()
+    cfg_server = APP_CONFIG.get("server", {})
+    cfg_model = APP_CONFIG.get("model", {})
+
+    font_path = cfg_model.get("font_path", './font/Arial_Unicode.ttf')
+    if not os.path.exists(font_path):
+        candidates = ['./font/Arial_Unicode.ttf', 'font/Arial_Unicode.ttf']
+        for c in candidates:
+            if os.path.exists(c):
+                font_path = c
+                break
+    try:
+        selffont = ImageFont.truetype(font_path, size=60)
+    except Exception as e:
+        print(f"[!] Notice loading font '{font_path}': {e}. Using default font.")
+        selffont = ImageFont.load_default()
+
     with open(args.config_path, "r") as f:
         config = yaml.safe_load(f)
 
     generator = torch.Generator(device="cuda")
     to_tensor = T.ToTensor()
 
-    processor = AutoProcessor.from_pretrained("Salesforce/blip2-opt-2.7b")
-    blipmodel = Blip2ForConditionalGeneration.from_pretrained("Salesforce/blip2-opt-2.7b", torch_dtype=torch.float16)
+    blip_id = cfg_model.get("blip_path", "Salesforce/blip2-opt-2.7b")
+    processor = AutoProcessor.from_pretrained(blip_id)
+    blipmodel = Blip2ForConditionalGeneration.from_pretrained(blip_id, torch_dtype=torch.float16)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3) if torch.cuda.is_available() else 0
     USE_LOW_VRAM = args.low_vram or (torch.cuda.is_available() and vram_gb < 36)
@@ -338,5 +405,10 @@ if __name__ == '__main__':
 
     pipe, trainable_model = init_pipeline(args, config, is_low_vram=USE_LOW_VRAM)
 
+    server_host = cfg_server.get("host", "0.0.0.0")
+    server_port = int(cfg_server.get("port", 6681))
+    server_share = cfg_server.get("share", False)
+
     # Launch the Gradio app
-    demo.queue().launch(server_name="0.0.0.0", server_port=6681, share=False)
+    print(f"\n[+] Launching Gradio UI on http://{server_host}:{server_port}...")
+    demo.queue().launch(server_name=server_host, server_port=server_port, share=server_share)
