@@ -104,10 +104,14 @@ def ensure_checkpoint(model_path: str = None, model_type: str = "512") -> str:
 
     # Check common alternative locations
     candidates = [
+        f"models/model_{model_type}/pytorch_lora_weights.safetensors",
+        "models/model_512/pytorch_lora_weights.safetensors",
+        "models/model_multisize/pytorch_lora_weights.safetensors",
+        "models/pytorch_lora_weights.safetensors",
         "models/model_512/epoch_100.safetensors",
         "models/model_multisize/epoch_100.safetensors",
         "models/epoch_100.safetensors",
-        f"models/model_{model_type}/epoch_100.safetensors",
+        "models/epoch_100.pt",
     ]
     for c in candidates:
         if os.path.exists(c):
@@ -123,7 +127,7 @@ def ensure_checkpoint(model_path: str = None, model_type: str = "512") -> str:
 
     # Auto-download from Hugging Face
     target_sub = f"model_{model_type}" if model_type in ("512", "multisize") else "model_512"
-    filename = f"{target_sub}/epoch_100.safetensors"
+    filename = f"{target_sub}/pytorch_lora_weights.safetensors"
     print("=" * 72)
     print(f"[*] FLUX-Text checkpoint '{model_path or filename}' not found locally.")
     print(f"[*] Auto-downloading '{filename}' from Hugging Face (GD-ML/FLUX-Text)...")
@@ -137,7 +141,6 @@ def ensure_checkpoint(model_path: str = None, model_type: str = "512") -> str:
             repo_id="GD-ML/FLUX-Text",
             filename=filename,
             local_dir="models",
-            local_dir_use_symlinks=False,
             token=token,
         )
         print(f"[+] Checkpoint successfully downloaded to: {downloaded}")

@@ -8,7 +8,7 @@ model:
   type: "512"
 
   # Path to FLUX-Text LoRA checkpoint file (auto-detected or auto-downloaded if missing)
-  checkpoint_path: "models/model_512/epoch_100.safetensors"
+  checkpoint_path: "models/model_512/pytorch_lora_weights.safetensors"
 
   # Training/Architecture configuration file
   config_path: "train/config/word_512_size.yaml"
